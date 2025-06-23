@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pencarian & Filter Data</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    th, td { padding: 8px; border: 1px solid #ccc; }
+    input, select, button { padding: 8px; margin-right: 10px; }
+    .controls { margin-bottom: 15px; display: flex; flex-wrap: wrap; gap: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Data Google Spreadsheet</h1>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Cari apa saja..." />
+    <select id="filter-kota">
+      <option value="">Filter Kota</option>
+    </select>
+    <button id="export-btn">Export CSV</button>
+  </div>
+
+  <table>
+    <thead id="table-head"></thead>
+    <tbody id="table-body"><tr><td colspan="99">Memuat data...</td></tr></tbody>
+  </table>
+
+  <script>
+    const sheetURL = "https://docs.google.com/spreadsheets/d/1nTzZ_loU-DEe6f2786bldBEPATp7IWb4U3rfFPyHvis/gviz/tq?tqx=out:json";
+
+    let allRows = [];
+    let headers = [];
+
+    function renderTable(data) {
+      const tbody = document.getElementById("table-body");
+      if (data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="${headers.length}">Tidak ditemukan.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.map(row =>
+        `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`
+      ).join("");
+    }
+
+    function updateTable() {
+      const keyword = document.getElementById("search").value.toLowerCase();
+      const kota = document.getElementById("filter-kota").value;
+
+      const filtered = allRows.filter(row =>
+        row.join(" ").toLowerCase().includes(keyword) &&
+        (kota === "" || row[2] === kota) // Asumsi kolom ke-3 adalah Kota
+      );
+
+      renderTable(filtered);
+    }
+
+    function fillDropdown(options, elementId) {
+      const dropdown = document.getElementById(elementId);
+      const unique = [...new Set(options)].filter(Boolean).sort();
+      dropdown.innerHTML = `<option value="">Filter Kota</option>` +
+        unique.map(val => `<option value="${val}">${val}</option>`).join("");
+    }
+
+    function exportToCSV(rows, headerRow) {
+      const csvContent = [headerRow, ...rows]
+        .map(e => e.map(cell => `"${cell}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "data_export.csv";
+      link.click();
+    }
+
+    fetch(sheetURL)
+      .then(res => res.text())
+      .then(text => {
+        const json = JSON.parse(text.substr(47).slice(0, -2));
+        headers = json.table.cols.map(c => c.label || ""); // kolom header
+        allRows = json.table.rows.map(row => row.c.map(cell => cell ? cell.v : ""));
+
+        // Tampilkan header tabel
+        document.getElementById("table-head").innerHTML =
+          `<tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr>`;
+
+        // Isi dropdown kota (kolom ke-3 = index 2)
+        const kotaList = allRows.map(row => row[2]);
+        fillDropdown(kotaList, "filter-kota");
+
+        renderTable(allRows);
+
+        document.getElementById("search").addEventListener("input", updateTable);
+        document.getElementById("filter-kota").addEventListener("change", updateTable);
+        document.getElementById("export-btn").addEventListener("click", () => {
+          const keyword = document.getElementById("search").value.toLowerCase();
+          const kota = document.getElementById("filter-kota").value;
+          const filtered = allRows.filter(row =>
+            row.join(" ").toLowerCase().includes(keyword) &&
+            (kota === "" || row[2] === kota)
+          );
+          exportToCSV(filtered, headers);
+        });
+      });
+  </script>
+</body>
+</html>
